@@ -403,18 +403,14 @@
   // 뷰 모드(그리드/타임라인)에 따라 실제 렌더링을 위임하는 진입점.
   function renderActive(items) {
     const container_ = container.querySelector('#rm-timetable');
-    const summary = container.querySelector('#rm-summary');
+    const statTotal = container.querySelector('#rm-stat-total');
+    const statOverlap = container.querySelector('#rm-stat-overlap');
     if (!container_) return;
 
     const overlapCount = computeOverlapMap(items); // item._times도 함께 채워짐(두 뷰 공용)
 
-    if (summary) {
-      summary.innerHTML = '';
-      const text = el('span', null, `전체 라이브러리 ${items.length}개 · 겹치는 시간대 `);
-      const strong = el('strong', null, `${overlapCount}건`);
-      summary.appendChild(text);
-      summary.appendChild(strong);
-    }
+    if (statTotal) statTotal.textContent = String(items.length);
+    if (statOverlap) statOverlap.textContent = String(overlapCount);
 
     container_.innerHTML = '';
     if (viewMode === 'grid') {
@@ -707,7 +703,7 @@
           console.warn(LOG_PREFIX, '일부 스코프 조회 실패:', data.errors);
           if (status) {
             status.style.display = 'block';
-            status.style.color = '#fca5a5';
+            status.style.color = 'color-mix(in srgb, #c0554f 88%, var(--app-text-primary))';
             status.textContent = `일부 스코프를 불러오지 못했습니다: ${data.errors.join(' / ')}`;
           }
         } else if (status) {

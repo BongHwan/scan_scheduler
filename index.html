@@ -1,10 +1,24 @@
 <div class="rm-root">
+  <div class="rm-header">
+    <div class="rm-title-row">
+      <span class="rm-title-icon"><i class="fa-solid fa-table-cells"></i></span>
+      <h2 class="rm-title">스캔 스케줄러</h2>
+    </div>
+    <p class="rm-desc">카테고리별 라이브러리 새로고침(REFRESH) 스케줄을 타임테이블로 한눈에 확인하고, 겹치는 시간대를 바로 찾아 조정하세요.</p>
+    <div class="rm-tally">
+      <div class="rm-tally-item">
+        <strong id="rm-stat-total">0</strong>
+        <span>전체 라이브러리</span>
+      </div>
+      <div class="rm-tally-item">
+        <strong id="rm-stat-overlap">0</strong>
+        <span>겹치는 시간대</span>
+      </div>
+    </div>
+  </div>
+
   <div class="rm-toolbar">
     <div class="rm-toolbar-left">
-      <i class="fa-solid fa-table-cells"></i>
-      <span class="rm-title">스캔 스케줄러 · 새로고침 타임테이블</span>
-    </div>
-    <div class="rm-toolbar-right">
       <div class="rm-view-toggle" role="group">
         <button id="rm-view-grid-btn" type="button" class="rm-view-btn active">
           <i class="fa-solid fa-border-all"></i> 요일×시간
@@ -13,6 +27,8 @@
           <i class="fa-solid fa-list"></i> 라이브러리별
         </button>
       </div>
+    </div>
+    <div class="rm-toolbar-right">
       <input id="rm-search-input" type="text" placeholder="라이브러리 이름 검색..." />
       <button id="rm-refresh-btn" type="button" title="새로고침">
         <i class="fa-solid fa-rotate"></i>
@@ -42,7 +58,6 @@
   </div>
 
   <div id="rm-status" class="rm-status">불러오는 중...</div>
-  <div id="rm-summary" class="rm-summary"></div>
 
   <div id="rm-timetable" class="rm-timetable"></div>
 
