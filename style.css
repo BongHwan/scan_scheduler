@@ -600,3 +600,151 @@
   outline-offset: -2px;
   background: color-mix(in srgb, var(--app-accent) 18%, transparent);
 }
+
+/* ==================== 월간 달력 뷰 ==================== */
+.rm-calendar-wrapper {
+  border: 1px solid var(--app-border, rgba(255, 255, 255, 0.15));
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--app-bg-main);
+}
+
+.rm-calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--app-bg-card);
+  border-bottom: 1px solid var(--app-border, rgba(255, 255, 255, 0.15));
+}
+
+.rm-calendar-title {
+  min-width: 110px;
+  text-align: center;
+  font-size: 16px;
+  color: var(--app-text-primary);
+}
+
+.rm-calendar-nav-btn,
+.rm-calendar-today-btn {
+  border: 1px solid var(--app-border, rgba(255, 255, 255, 0.2));
+  background: var(--app-bg-main);
+  color: var(--app-text-primary);
+  border-radius: 6px;
+  min-height: 30px;
+  cursor: pointer;
+}
+
+.rm-calendar-nav-btn {
+  width: 32px;
+}
+
+.rm-calendar-today-btn {
+  padding: 4px 10px;
+  font-family: inherit;
+}
+
+.rm-calendar-nav-btn:hover,
+.rm-calendar-today-btn:hover {
+  background: var(--app-bg-card-hover);
+}
+
+.rm-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  min-width: 840px;
+  overflow-x: auto;
+}
+
+.rm-calendar-weekday {
+  padding: 7px 6px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--app-text-secondary, var(--app-text-primary));
+  background: var(--app-bg-card);
+  border-right: 1px solid var(--app-border, rgba(255, 255, 255, 0.1));
+  border-bottom: 1px solid var(--app-border, rgba(255, 255, 255, 0.15));
+}
+
+.rm-calendar-weekday-0 { color: #ef4444; }
+.rm-calendar-weekday-6 { color: #3b82f6; }
+
+.rm-calendar-day {
+  min-height: 122px;
+  padding: 6px;
+  overflow: hidden;
+  border-right: 1px solid var(--app-border, rgba(255, 255, 255, 0.1));
+  border-bottom: 1px solid var(--app-border, rgba(255, 255, 255, 0.1));
+  background: var(--app-bg-main);
+}
+
+.rm-calendar-outside {
+  opacity: 0.36;
+  background: color-mix(in srgb, var(--app-bg-card) 55%, transparent);
+}
+
+.rm-calendar-date {
+  width: 25px;
+  height: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--app-text-secondary, var(--app-text-primary));
+}
+
+.rm-calendar-today .rm-calendar-date {
+  background: var(--app-accent);
+  color: var(--app-bg-main, #fff);
+}
+
+.rm-calendar-event {
+  display: block;
+  width: 100%;
+  margin: 0 0 3px;
+  padding: 3px 5px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--rm-event-color) 42%, transparent);
+  border-left: 3px solid var(--rm-event-color);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--rm-event-color) 16%, transparent);
+  color: var(--app-text-primary);
+  font-family: inherit;
+  font-size: 10.5px;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.rm-calendar-event:hover {
+  filter: brightness(1.2);
+}
+
+.rm-calendar-event-overlap {
+  box-shadow: inset 0 0 0 1px #c0554f;
+  background: color-mix(in srgb, #c0554f 15%, transparent);
+}
+
+.rm-calendar-more {
+  padding: 2px 4px;
+  color: var(--app-text-muted);
+  font-size: 10.5px;
+}
+
+@media (max-width: 760px) {
+  .rm-calendar-wrapper {
+    overflow-x: auto;
+  }
+  .rm-calendar-day {
+    min-height: 105px;
+  }
+  .rm-calendar-event {
+    font-size: 10px;
+  }
+}

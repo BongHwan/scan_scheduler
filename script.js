@@ -9,7 +9,10 @@
   let allItems = [];
   let currentEditItem = null; // 지금 편집 패널에서 다루고 있는 item (allItems의 원소 참조)
   let helperListenersBound = false;
-  let viewMode = 'grid'; // 'grid' (요일×시간) | 'timeline' (라이브러리별)
+  let viewMode = 'grid'; // 'grid' (요일×시간) | 'month' (월간 달력) | 'timeline' (라이브러리별)
+  const today = new Date();
+  let calendarYear = today.getFullYear();
+  let calendarMonth = today.getMonth(); // 0~11
 
   const SCOPE_COLORS = {
     general: '#3b82f6',
@@ -107,6 +110,81 @@
       console.warn(LOG_PREFIX, 'cron 파싱 실패:', cronStr, e);
       return [];
     }
+  }
+
+  // 특정 날짜에 cron이 실행되는지 판단한다. 표준 5필드 cron의 일/월/요일을
+  // 모두 반영하며, 일과 요일이 동시에 제한된 경우 일반 cron과 같이 OR로 처리한다.
+  function cronMatchesDate(cronStr, date) {
+    if (!cronStr || typeof cronStr !== 'string') return false;
+    const fields = cronStr.trim().split(/\s+/);
+    if (fields.length < 5) return false;
+    try {
+      const domField = fields[2];
+      const monthField = fields[3];
+      const dowField = fields[4];
+      const monthMatch = parseCronField(monthField, 1, 12).includes(date.getMonth() + 1);
+      if (!monthMatch) return false;
+
+      const domAny = domField === '*';
+      const dowAny = dowField === '*';
+      const domMatch = parseCronField(domField, 1, 31).includes(date.getDate());
+      const cronDow = date.getDay();
+      const dowValues = parseCronField(dowField, 0, 7).map((v) => (v === 7 ? 0 : v));
+      const dowMatch = dowValues.includes(cronDow);
+
+      if (domAny && dowAny) return true;
+      if (domAny) return dowMatch;
+      if (dowAny) return domMatch;
+      return domMatch || dowMatch;
+    } catch (e) {
+      console.warn(LOG_PREFIX, '날짜 cron 파싱 실패:', cronStr, e);
+      return false;
+    }
+  }
+
+  function calendarEntriesForDate(items, date) {
+    const entries = [];
+    items.forEach((item) => {
+      const cronStr = effectiveCron(item);
+      if (!cronMatchesDate(cronStr, date)) return;
+      const fields = cronStr.trim().split(/\s+/);
+      const minutes = parseCronField(fields[0], 0, 59);
+      const hours = parseCronField(fields[1], 0, 23);
+      // 지나치게 잦은 스케줄은 달력 칸을 잠식하지 않도록 한 줄로 요약한다.
+      if (minutes.length * hours.length > 48) {
+        entries.push({ item, hour: null, minute: null, frequent: true, isOverlap: false });
+        return;
+      }
+      hours.forEach((hour) => minutes.forEach((minute) => {
+        entries.push({ item, hour, minute, frequent: false, isOverlap: false });
+      }));
+    });
+
+    const counts = new Map();
+    entries.forEach((entry) => {
+      if (entry.frequent) return;
+      const key = `${entry.hour}:${entry.minute}`;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    entries.forEach((entry) => {
+      if (!entry.frequent) entry.isOverlap = counts.get(`${entry.hour}:${entry.minute}`) > 1;
+    });
+    entries.sort((a, b) => {
+      if (a.frequent !== b.frequent) return a.frequent ? 1 : -1;
+      return (a.hour ?? 99) - (b.hour ?? 99) || (a.minute ?? 99) - (b.minute ?? 99) ||
+        String(a.item.name).localeCompare(String(b.item.name));
+    });
+    return entries;
+  }
+
+  function monthOverlapCount(items) {
+    const lastDay = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+    let count = 0;
+    for (let day = 1; day <= lastDay; day += 1) {
+      const entries = calendarEntriesForDate(items, new Date(calendarYear, calendarMonth, day));
+      count += entries.filter((entry) => entry.isOverlap).length;
+    }
+    return count;
   }
 
   function pad2(n) {
@@ -400,14 +478,117 @@
     return wrapper;
   }
 
-  // 뷰 모드(그리드/타임라인)에 따라 실제 렌더링을 위임하는 진입점.
+  function changeCalendarMonth(delta) {
+    calendarMonth += delta;
+    if (calendarMonth < 0) {
+      calendarMonth = 11;
+      calendarYear -= 1;
+    } else if (calendarMonth > 11) {
+      calendarMonth = 0;
+      calendarYear += 1;
+    }
+    applyFilter();
+  }
+
+  function renderMonthCalendar(items) {
+    const wrapper = el('div', 'rm-calendar-wrapper');
+    const nav = el('div', 'rm-calendar-nav');
+    const prevBtn = el('button', 'rm-calendar-nav-btn');
+    prevBtn.type = 'button';
+    prevBtn.title = '이전 달';
+    prevBtn.innerHTML = '<i class="fa-solid fa-chevron-left"></i>';
+    prevBtn.addEventListener('click', () => changeCalendarMonth(-1));
+
+    const title = el('strong', 'rm-calendar-title', `${calendarYear}년 ${calendarMonth + 1}월`);
+    const todayBtn = el('button', 'rm-calendar-today-btn', '오늘');
+    todayBtn.type = 'button';
+    todayBtn.addEventListener('click', () => {
+      const now = new Date();
+      calendarYear = now.getFullYear();
+      calendarMonth = now.getMonth();
+      applyFilter();
+    });
+    const nextBtn = el('button', 'rm-calendar-nav-btn');
+    nextBtn.type = 'button';
+    nextBtn.title = '다음 달';
+    nextBtn.innerHTML = '<i class="fa-solid fa-chevron-right"></i>';
+    nextBtn.addEventListener('click', () => changeCalendarMonth(1));
+
+    nav.appendChild(prevBtn);
+    nav.appendChild(title);
+    nav.appendChild(todayBtn);
+    nav.appendChild(nextBtn);
+    wrapper.appendChild(nav);
+
+    const calendar = el('div', 'rm-calendar');
+    ['일', '월', '화', '수', '목', '금', '토'].forEach((label, index) => {
+      const head = el('div', `rm-calendar-weekday rm-calendar-weekday-${index}`, `${label}요일`);
+      calendar.appendChild(head);
+    });
+
+    const firstDow = new Date(calendarYear, calendarMonth, 1).getDay();
+    const lastDay = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+    const previousLastDay = new Date(calendarYear, calendarMonth, 0).getDate();
+    const totalCells = Math.ceil((firstDow + lastDay) / 7) * 7;
+    const now = new Date();
+
+    for (let cell = 0; cell < totalCells; cell += 1) {
+      const dayNumber = cell - firstDow + 1;
+      let date;
+      let outside = false;
+      if (dayNumber < 1) {
+        date = new Date(calendarYear, calendarMonth - 1, previousLastDay + dayNumber);
+        outside = true;
+      } else if (dayNumber > lastDay) {
+        date = new Date(calendarYear, calendarMonth + 1, dayNumber - lastDay);
+        outside = true;
+      } else {
+        date = new Date(calendarYear, calendarMonth, dayNumber);
+      }
+
+      const isToday = date.getFullYear() === now.getFullYear() &&
+        date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
+      const cellNode = el('div', `rm-calendar-day${outside ? ' rm-calendar-outside' : ''}${isToday ? ' rm-calendar-today' : ''}`);
+      const dateLabel = el('div', 'rm-calendar-date', String(date.getDate()));
+      cellNode.appendChild(dateLabel);
+
+      if (!outside) {
+        const entries = calendarEntriesForDate(items, date);
+        entries.slice(0, 8).forEach((entry) => {
+          const color = SCOPE_COLORS[entry.item.scope] || '#94a3b8';
+          const timeText = entry.frequent ? '자주' : `${pad2(entry.hour)}:${pad2(entry.minute)}`;
+          const chip = el(
+            'button',
+            `rm-calendar-event${entry.isOverlap ? ' rm-calendar-event-overlap' : ''}`,
+            `${timeText} ${entry.item.name}`
+          );
+          chip.type = 'button';
+          chip.style.setProperty('--rm-event-color', color);
+          chip.title = `${entry.item.scope_label || entry.item.scope} · ${entry.item.name} · ${calendarYear}-${pad2(calendarMonth + 1)}-${pad2(date.getDate())} ${timeText}${entry.isOverlap ? ' (같은 시간에 겹침)' : ''}`;
+          chip.addEventListener('click', () => openEditPanel(entry.item));
+          cellNode.appendChild(chip);
+        });
+        if (entries.length > 8) {
+          cellNode.appendChild(el('div', 'rm-calendar-more', `+${entries.length - 8}개 더 보기`));
+        }
+      }
+      calendar.appendChild(cellNode);
+    }
+
+    wrapper.appendChild(calendar);
+    return wrapper;
+  }
+
+  // 뷰 모드(그리드/월간/타임라인)에 따라 실제 렌더링을 위임하는 진입점.
   function renderActive(items) {
     const container_ = container.querySelector('#rm-timetable');
     const statTotal = container.querySelector('#rm-stat-total');
     const statOverlap = container.querySelector('#rm-stat-overlap');
     if (!container_) return;
 
-    const overlapCount = computeOverlapMap(items); // item._times도 함께 채워짐(두 뷰 공용)
+    const overlapCount = viewMode === 'month'
+      ? monthOverlapCount(items)
+      : computeOverlapMap(items); // item._times도 함께 채워짐(두 기존 뷰 공용)
 
     if (statTotal) statTotal.textContent = String(items.length);
     if (statOverlap) statOverlap.textContent = String(overlapCount);
@@ -415,6 +596,8 @@
     container_.innerHTML = '';
     if (viewMode === 'grid') {
       container_.appendChild(renderGridTable(items));
+    } else if (viewMode === 'month') {
+      container_.appendChild(renderMonthCalendar(items));
     } else {
       renderTimelineInto(container_, items);
     }
@@ -433,12 +616,16 @@
     if (viewMode === mode) return;
     viewMode = mode;
     const gridBtn = container.querySelector('#rm-view-grid-btn');
+    const monthBtn = container.querySelector('#rm-view-month-btn');
     const timelineBtn = container.querySelector('#rm-view-timeline-btn');
     const gridLegend = container.querySelector('#rm-grid-legend');
+    const monthLegend = container.querySelector('#rm-month-legend');
     const timelineLegend = container.querySelector('#rm-timeline-legend');
     gridBtn.classList.toggle('active', mode === 'grid');
+    monthBtn.classList.toggle('active', mode === 'month');
     timelineBtn.classList.toggle('active', mode === 'timeline');
     gridLegend.hidden = mode !== 'grid';
+    monthLegend.hidden = mode !== 'month';
     timelineLegend.hidden = mode !== 'timeline';
     applyFilter();
   }
@@ -451,8 +638,8 @@
     return labels[dow] || `요일(${dow})`;
   }
 
-  // cron 문자열 -> 도우미 폼에 채울 값 추정. 표준 패턴(분 시 * * *) 또는
-  // (분 시 * * 요일)만 도우미로 표현 가능하고, 그 외는 '직접 입력'으로 처리.
+  // cron 문자열 -> 도우미 폼에 채울 값 추정. 매일/매주/매월 단순 패턴은
+  // 도우미로 표현하고, 복합 표현식은 '직접 입력'으로 처리한다.
   function parseCronToHelper(cronStr) {
     const fields = (cronStr || '').trim().split(/\s+/);
     if (fields.length < 5) return { type: 'manual' };
@@ -468,6 +655,14 @@
         return { type: 'weekly', hh, mm, dow };
       }
     }
+    if (isNum(minute) && isNum(hour) && /^([1-9]|[12]\d|3[01])$/.test(dom) && month === '*' && dow === '*') {
+      return {
+        type: 'monthly',
+        hh: pad2(parseInt(hour, 10) % 24),
+        mm: pad2(parseInt(minute, 10) % 60),
+        dom,
+      };
+    }
     return { type: 'manual' };
   }
 
@@ -476,21 +671,24 @@
       type: container.querySelector('#rm-repeat-type').value,
       time: container.querySelector('#rm-repeat-time').value || '03:00',
       dow: container.querySelector('#rm-repeat-dow').value,
+      dom: container.querySelector('#rm-repeat-dom').value,
     };
   }
 
   function buildCronFromHelper() {
-    const { type, time, dow } = readHelperFields();
+    const { type, time, dow, dom } = readHelperFields();
     const [hh, mm] = time.split(':').map((v) => parseInt(v, 10) || 0);
     if (type === 'daily') return `${mm} ${hh} * * *`;
     if (type === 'weekly') return `${mm} ${hh} * * ${dow}`;
+    if (type === 'monthly') return `${mm} ${hh} ${dom} * *`;
     return container.querySelector('#rm-cron-text').value.trim();
   }
 
   function buildSummaryText() {
-    const { type, time, dow } = readHelperFields();
+    const { type, time, dow, dom } = readHelperFields();
     if (type === 'daily') return `매일 ${time} 실행`;
     if (type === 'weekly') return `매주 ${dowLabel(parseInt(dow, 10))} ${time} 실행`;
+    if (type === 'monthly') return `매월 ${dom}일 ${time} 실행`;
     return '직접 입력한 Cron식을 그대로 사용합니다.';
   }
 
@@ -498,9 +696,11 @@
     const type = container.querySelector('#rm-repeat-type').value;
     const timeField = container.querySelector('#rm-time-field');
     const dowField = container.querySelector('#rm-dow-field');
+    const domField = container.querySelector('#rm-dom-field');
     const cronInput = container.querySelector('#rm-cron-text');
     timeField.style.display = type === 'manual' ? 'none' : '';
     dowField.style.display = type === 'weekly' ? '' : 'none';
+    domField.style.display = type === 'monthly' ? '' : 'none';
     cronInput.readOnly = type !== 'manual';
   }
 
@@ -540,6 +740,7 @@
     container.querySelector('#rm-repeat-type').addEventListener('change', onHelperChanged);
     container.querySelector('#rm-repeat-time').addEventListener('input', onHelperChanged);
     container.querySelector('#rm-repeat-dow').addEventListener('change', onHelperChanged);
+    container.querySelector('#rm-repeat-dom').addEventListener('change', onHelperChanged);
     container.querySelector('#rm-cron-text').addEventListener('input', onCronTextChanged);
     container.querySelector('#rm-edit-close-btn').addEventListener('click', () => closeEditPanel(true));
     container.querySelector('#rm-edit-overlay').addEventListener('click', (evt) => {
@@ -560,6 +761,7 @@
     const typeSel = container.querySelector('#rm-repeat-type');
     const timeInput = container.querySelector('#rm-repeat-time');
     const dowSel = container.querySelector('#rm-repeat-dow');
+    const domSel = container.querySelector('#rm-repeat-dom');
     const cronInput = container.querySelector('#rm-cron-text');
 
     typeSel.value = parsed.type;
@@ -568,6 +770,9 @@
     } else if (parsed.type === 'weekly') {
       timeInput.value = `${parsed.hh}:${parsed.mm}`;
       dowSel.value = parsed.dow;
+    } else if (parsed.type === 'monthly') {
+      timeInput.value = `${parsed.hh}:${parsed.mm}`;
+      domSel.value = parsed.dom;
     }
     cronInput.value = item.cron_schedule || '';
 
@@ -738,6 +943,10 @@
   const viewGridBtn = container.querySelector('#rm-view-grid-btn');
   if (viewGridBtn) {
     viewGridBtn.addEventListener('click', () => setViewMode('grid'));
+  }
+  const viewMonthBtn = container.querySelector('#rm-view-month-btn');
+  if (viewMonthBtn) {
+    viewMonthBtn.addEventListener('click', () => setViewMode('month'));
   }
   const viewTimelineBtn = container.querySelector('#rm-view-timeline-btn');
   if (viewTimelineBtn) {

@@ -27,7 +27,7 @@ class ScanSchedulerMetadataProvider(BaseMetadataProvider):
     update_manifest = {
         "enabled": True,
         "provider": "github-raw",
-        "raw_base_url": "https://raw.githubusercontent.com/yume-script/scan_scheduler/refs/heads/main/",
+        "raw_base_url": "https://raw.githubusercontent.com/BongHwan/scan_scheduler/refs/heads/main/",
         "files": [
             "scan_scheduler.py",
             "__init__.py",
