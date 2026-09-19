@@ -130,7 +130,8 @@ class ScanSchedulerMetadataProvider(BaseMetadataProvider):
             try:
                 gateway = self.get_db_gateway(scope_key)
                 rows = gateway.fetch_all(
-                    "SELECT %s FROM libraries ORDER BY name" % self.SCHEDULE_COLUMNS
+                    "SELECT %s FROM libraries "
+                    "WHERE schedule_enabled = 1 ORDER BY name" % self.SCHEDULE_COLUMNS
                 )
             except Exception as exc:  # noqa: BLE001 - 스코프 하나 실패해도 나머지는 계속 진행
                 err_msg = "%s: %s" % (scope_key, exc)
